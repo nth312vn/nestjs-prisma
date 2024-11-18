@@ -1,6 +1,7 @@
 import {
     BadRequestException,
     Injectable,
+    NotFoundException,
     UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/Prisma/prisma.service';
@@ -8,6 +9,7 @@ import { LoginDto, RegisterDto } from './dto/auth.dto';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { IFingerprint } from 'nestjs-fingerprint';
 
 @Injectable()
 export class AuthService {
@@ -50,52 +52,99 @@ export class AuthService {
             },
         });
     }
-    async login(data: LoginDto) {
+    async login(data: LoginDto, fp: IFingerprint, userAgent: string) {
         const { email, password } = data;
         const user = await this.validateUser(email, password);
         if (!user) {
             throw new UnauthorizedException('Email or password is incorrect.');
         }
         const payload = { email: user.email, id: user.id };
-        const accessToken = this.jwtService.sign(payload, {
-            expiresIn: this.configService.get<string>(
-                'ACCESS_TOKEN_EXPIRE_TIME',
-                '15m',
-            ),
+        const [accessToken, refreshToken] = await Promise.all([
+            this.jwtService.signAsync(payload, {
+                expiresIn: this.configService.get<string>(
+                    'ACCESS_TOKEN_EXPIRE_TIME',
+                    '15m',
+                ),
+            }),
+            this.jwtService.signAsync(payload, {
+                expiresIn: this.configService.get<string>(
+                    'REFRESH_TOKEN_EXPIRE_TIME',
+                    '7d',
+                ),
+            }),
+        ]);
+        await this.prisma.session.create({
+            data: {
+                userId: user.id,
+                token: refreshToken,
+                fingerprint: fp.id,
+                ip: fp.ipAddress.value,
+                userAgent: userAgent,
+            },
         });
-        const refreshToken = this.jwtService.sign(payload, {
-            expiresIn: this.configService.get<string>(
-                'REFRESH_TOKEN_EXPIRE_TIME',
-                '7d',
-            ),
-        });
+
         return {
             accessToken,
             refreshToken,
         };
     }
+    async logout(RefreshToken: string, userId: string) {
+        await this.prisma.session.delete({
+            where: { token: RefreshToken, userId },
+        });
+    }
     async validateUser(email: string, password: string) {
         const user = await this.prisma.user.findUnique({ where: { email } });
         if (!user) {
-            throw new UnauthorizedException('Invalid credentials.');
+            throw new UnauthorizedException('User not found.');
         }
 
         const passwordMatch = await bcrypt.compare(password, user.password);
         if (!passwordMatch) {
-            throw new UnauthorizedException('Invalid credentials.');
+            throw new UnauthorizedException('User or password');
         }
 
         return user;
     }
-    refreshAccessToken(refreshToken: string) {
+    async refreshAccessToken(refreshToken: string, userId: string) {
         try {
             const payload = this.jwtService.verify(refreshToken);
-            const accessToken = this.jwtService.sign(
-                { email: payload.email, sub: payload.sub },
-                { expiresIn: '15m' },
-            );
-            return { accessToken };
-        } catch {
+            console.log(userId);
+            const session = await this.prisma.session.findUnique({
+                where: {
+                    token: refreshToken,
+                    userId,
+                },
+            });
+            if (!session) {
+                throw new NotFoundException('Session not found');
+            }
+            const tokenPayload = {
+                userId: payload.id,
+                email: payload.email,
+            };
+            const [accessToken, newRefreshToken] = await Promise.all([
+                this.jwtService.signAsync(tokenPayload, {
+                    expiresIn: this.configService.get<string>(
+                        'ACCESS_TOKEN_EXPIRE_TIME',
+                        '15m',
+                    ),
+                }),
+                this.jwtService.signAsync(tokenPayload, {
+                    expiresIn: this.configService.get<string>(
+                        'REFRESH_TOKEN_EXPIRE_TIME',
+                        '7d',
+                    ),
+                }),
+            ]);
+            await this.prisma.session.update({
+                where: { token: refreshToken, userId },
+                data: { token: newRefreshToken },
+            });
+
+            return { accessToken, refreshToken: newRefreshToken };
+        } catch (err) {
+            console.log(err);
             throw new UnauthorizedException('Invalid refresh token');
         }
     }

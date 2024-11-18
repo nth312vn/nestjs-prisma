@@ -4,6 +4,7 @@ import {
     IsNotEmpty,
     IsOptional,
     IsPhoneNumber,
+    IsString,
     MaxLength,
     MinLength,
 } from 'class-validator';
@@ -11,12 +12,18 @@ import {
 export class RegisterDto {
     @IsNotEmpty({ message: 'Name is required' })
     @ApiProperty({ example: 'John Doe', description: 'name of user ' })
+    @IsString()
+    @MaxLength(255, {
+        message: 'Name must be at most 255 characters long',
+    })
     name?: string;
     @IsNotEmpty({ message: 'Email is required' })
     @IsEmail({}, { message: 'Invalid email format' })
+    @IsString()
     @MaxLength(255, {
         message: 'Email must be at most 255 characters long',
     })
+    @IsString()
     @ApiProperty({
         example: 'example@gmail.com',
         description: 'The unique email address of the user',
@@ -29,6 +36,7 @@ export class RegisterDto {
         example: 'password123',
         description: 'The password of user',
     })
+    @IsString()
     password: string;
     @IsOptional()
     @MaxLength(255, {
@@ -38,6 +46,7 @@ export class RegisterDto {
         example: 'https://example.com/avatar.jpg',
         description: 'The avatar URL of the user',
     })
+    @IsString()
     avatar?: string;
 
     @IsOptional()
@@ -87,4 +96,23 @@ export class LoginDto {
         description: 'The password of user',
     })
     password: string;
+}
+export class LogoutDto {
+    @IsNotEmpty({ message: 'token is required' })
+    @ApiProperty({
+        example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ey',
+        description: 'token of user',
+    })
+    @IsString()
+    token: string;
+}
+export class RefreshTokenDto {
+    @IsNotEmpty()
+    @IsString()
+    @ApiProperty({
+        example:
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c',
+        description: 'refresh token of user',
+    })
+    refreshToken: string;
 }
