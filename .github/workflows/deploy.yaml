@@ -23,7 +23,7 @@ jobs:
                   tags: nest-api:latest
                   file: ./Dockerfile
             - name: Deploy to Vercel
-              uses: vercel/actions/deploy@v12
+              uses: vercel/actions/deploy@v20
               with:
                   token: ${{ secrets.VERCEL_TOKEN }}
                   orgId: your-vercel-org-id
