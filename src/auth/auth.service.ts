@@ -59,11 +59,12 @@ export class AuthService {
             throw new UnauthorizedException('Email or password is incorrect.');
         }
         const payload = { email: user.email, id: user.id };
+
         const [accessToken, refreshToken] = await Promise.all([
             this.jwtService.signAsync(payload, {
                 expiresIn: this.configService.get<string>(
                     'ACCESS_TOKEN_EXPIRE_TIME',
-                    '15m',
+                    '1m',
                 ),
             }),
             this.jwtService.signAsync(payload, {
@@ -88,9 +89,9 @@ export class AuthService {
             refreshToken,
         };
     }
-    async logout(RefreshToken: string, userId: string) {
+    async logout(userId: string, fp: IFingerprint) {
         await this.prisma.session.delete({
-            where: { token: RefreshToken, userId },
+            where: { fingerprint: fp.id, userId: userId },
         });
     }
     async validateUser(email: string, password: string) {
@@ -106,21 +107,20 @@ export class AuthService {
 
         return user;
     }
-    async refreshAccessToken(refreshToken: string, userId: string) {
+    async refreshAccessToken(refreshToken: string) {
         try {
             const payload = this.jwtService.verify(refreshToken);
-            console.log(userId);
             const session = await this.prisma.session.findUnique({
                 where: {
                     token: refreshToken,
-                    userId,
+                    userId: payload.id,
                 },
             });
             if (!session) {
                 throw new NotFoundException('Session not found');
             }
             const tokenPayload = {
-                userId: payload.id,
+                id: payload.id,
                 email: payload.email,
             };
             const [accessToken, newRefreshToken] = await Promise.all([
@@ -138,13 +138,12 @@ export class AuthService {
                 }),
             ]);
             await this.prisma.session.update({
-                where: { token: refreshToken, userId },
+                where: { token: refreshToken, userId: payload.id },
                 data: { token: newRefreshToken },
             });
 
             return { accessToken, refreshToken: newRefreshToken };
         } catch (err) {
-            console.log(err);
             throw new UnauthorizedException('Invalid refresh token');
         }
     }

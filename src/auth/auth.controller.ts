@@ -9,12 +9,7 @@ import {
     UseGuards,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import {
-    LoginDto,
-    LogoutDto,
-    RefreshTokenDto,
-    RegisterDto,
-} from './dto/auth.dto';
+import { LoginDto, RefreshTokenDto, RegisterDto } from './dto/auth.dto';
 import { Fingerprint, IFingerprint } from 'nestjs-fingerprint';
 import { User } from 'src/decorator/user.decorator';
 import { JwtAuthGuard } from 'src/guard/jwt-auth.guard';
@@ -42,16 +37,10 @@ export class AuthController {
         const userAgent = headers['user-agent'];
         return this.authService.login(loginDto, fp, userAgent);
     }
-    @UseGuards(JwtAuthGuard)
-    @ApiBearerAuth('JWT-auth')
     @Post('refresh-token')
-    async refreshToken(
-        @Body() refreshTokenDto: RefreshTokenDto,
-        @User() user: UserDecoratorData,
-    ) {
+    async refreshToken(@Body() refreshTokenDto: RefreshTokenDto) {
         return this.authService.refreshAccessToken(
             refreshTokenDto.refreshToken,
-            user.userId,
         );
     }
 
@@ -60,10 +49,10 @@ export class AuthController {
     @UseFilters(new PrismaExceptionFilter())
     @ApiBearerAuth('JWT-auth')
     async logout(
-        @Body() logoutDto: LogoutDto,
         @User() user: UserDecoratorData,
+        @Fingerprint() fp: IFingerprint,
     ) {
-        await this.authService.logout(logoutDto.token, user.userId);
+        await this.authService.logout(user.userId, fp);
         return {
             message: 'logout successfully',
         };
