@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
+import { UnprocessableEntityException, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
@@ -10,6 +10,15 @@ async function bootstrap() {
             whitelist: true,
             forbidNonWhitelisted: true,
             transform: true,
+            exceptionFactory(errors) {
+                return new UnprocessableEntityException({
+                    message: 'Validation failed',
+                    error: {
+                        field: errors[0].property,
+                        message: errors[0].constraints,
+                    },
+                });
+            },
         }),
     );
     app.enableCors();

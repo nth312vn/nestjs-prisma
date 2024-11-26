@@ -14,7 +14,7 @@ import { Fingerprint, IFingerprint } from 'nestjs-fingerprint';
 import { User } from 'src/decorator/user.decorator';
 import { JwtAuthGuard } from 'src/guard/jwt-auth.guard';
 import { ApiBearerAuth } from '@nestjs/swagger';
-import { UserDecoratorData } from 'src/types/auth';
+import { UserDecoratorData } from 'src/types/auth.type';
 import { PrismaExceptionFilter } from 'src/exceptions/PrismaException.exception';
 
 @Controller('auth')

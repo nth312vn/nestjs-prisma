@@ -10,6 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { IFingerprint } from 'nestjs-fingerprint';
+import { PayloadToken } from 'src/types/auth.type';
 
 @Injectable()
 export class AuthService {
@@ -60,20 +61,7 @@ export class AuthService {
         }
         const payload = { email: user.email, id: user.id };
 
-        const [accessToken, refreshToken] = await Promise.all([
-            this.jwtService.signAsync(payload, {
-                expiresIn: this.configService.get<string>(
-                    'ACCESS_TOKEN_EXPIRE_TIME',
-                    '1m',
-                ),
-            }),
-            this.jwtService.signAsync(payload, {
-                expiresIn: this.configService.get<string>(
-                    'REFRESH_TOKEN_EXPIRE_TIME',
-                    '7d',
-                ),
-            }),
-        ]);
+        const [accessToken, refreshToken] = await this.generateToken(payload);
         await this.prisma.session.create({
             data: {
                 userId: user.id,
@@ -90,7 +78,7 @@ export class AuthService {
         };
     }
     async logout(userId: string, fp: IFingerprint) {
-        await this.prisma.session.delete({
+        await this.prisma.session.deleteMany({
             where: { fingerprint: fp.id, userId: userId },
         });
     }
@@ -123,20 +111,8 @@ export class AuthService {
                 id: payload.id,
                 email: payload.email,
             };
-            const [accessToken, newRefreshToken] = await Promise.all([
-                this.jwtService.signAsync(tokenPayload, {
-                    expiresIn: this.configService.get<string>(
-                        'ACCESS_TOKEN_EXPIRE_TIME',
-                        '15m',
-                    ),
-                }),
-                this.jwtService.signAsync(tokenPayload, {
-                    expiresIn: this.configService.get<string>(
-                        'REFRESH_TOKEN_EXPIRE_TIME',
-                        '7d',
-                    ),
-                }),
-            ]);
+            const [accessToken, newRefreshToken] =
+                await this.generateToken(tokenPayload);
             await this.prisma.session.update({
                 where: { token: refreshToken, userId: payload.id },
                 data: { token: newRefreshToken },
@@ -146,5 +122,21 @@ export class AuthService {
         } catch (err) {
             throw new UnauthorizedException('Invalid refresh token');
         }
+    }
+    generateToken(payload: PayloadToken) {
+        return Promise.all([
+            this.jwtService.signAsync(payload, {
+                expiresIn: this.configService.get<string>(
+                    'ACCESS_TOKEN_EXPIRE_TIME',
+                    '1m',
+                ),
+            }),
+            this.jwtService.signAsync(payload, {
+                expiresIn: this.configService.get<string>(
+                    'REFRESH_TOKEN_EXPIRE_TIME',
+                    '7d',
+                ),
+            }),
+        ]);
     }
 }
